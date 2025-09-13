@@ -12,6 +12,22 @@
 确定好选定的基准标记在所有的图像序列中的位置以后，我们利用光流法对基准标记进行追踪，运行tack_fiducial_markers.py，在弹出的图像中选定追踪目标（记录的基准标记点），
 追踪结果会保存到.../Trajectories/*.csv中，为了验证光流法追踪是否精准，该script会对每一个图像自动生成所追踪点的结果图，用绿色方框指示追踪结果，保存在.../Trajectories/Markers中
 
-我们需要挨个检查每一个序列，确定所有目标点被正确追踪以后，就可以利用2组成像系统的三维空间位置信息，以及基准标记点和肿瘤中心点在图像中的运动轨迹，
-计算它们在三维空间中的运动轨迹，然后进行比较，确定肿瘤追踪误差
+我们需要挨个检查每一个序列，对于失败的案例，请尝试更改追踪通道，将tack_fiducial_markers.py中的
+r_channel = first_frame[:, :, 0]和curr_img = 255 - curr_frame[:, :, 0]
+改为通道1或者2
+
+确定所有目标点被正确追踪以后，就可以利用2组成像系统的三维空间位置信息，以及基准标记点和肿瘤中心点在图像中的运动轨迹。
+
+Process_marker_trajectories_csv_files.py用于处理光流法生成的记录基准标记运动轨迹的csv文件，删除所有CSV文件中'patient','field'和'device'列，添加成像系统几何信息：'X tube x','X tube y','X tube z','IPEL'和'OID'列，便于我们使用compute_intersection.py进行批量计算
+
+add_couch_angle_info.py用于添加每一个成像序列的治疗床角度信息。
+
+split_full_trajectories.py用于将肿瘤中心点运动轨迹从Evaluate_DUCK_Marker_Track.py生成的full_trajectories.csv中拆分所有序列的数据到单独的csv文件中，并添加相应的几何信息，便于使用compute_intersection.py进行批量计算
+
+compute_intersection.py用于根据成像系统几何信息以及目标点在立体透视系统中的位置，计算选定目标在三维空间中的运动轨迹，基准标记和肿瘤中心点都是用它计算。
+
+
+
+
+
 
