@@ -24,7 +24,9 @@ add_couch_angle_info.py用于添加每一个成像序列的治疗床角度信息
 
 split_full_trajectories.py用于将肿瘤中心点运动轨迹从Evaluate_DUCK_Marker_Track.py生成的full_trajectories.csv中拆分所有序列的数据到单独的csv文件中，并添加相应的几何信息，便于使用compute_intersection.py进行批量计算
 
-compute_intersection.py用于根据成像系统几何信息以及目标点在立体透视系统中的位置，计算选定目标在三维空间中的运动轨迹，基准标记和肿瘤中心点都是用它计算。
+compute_intersection.py用于根据成像系统几何信息以及基准标记点在立体透视系统中的位置，计算基准标记在三维空间中的运动轨迹。
+
+
 
 
 
