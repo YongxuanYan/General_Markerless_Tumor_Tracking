@@ -156,6 +156,74 @@ def compute_intersection(XSA, XSB, PA, PB, OID, CouchAngle, resolution, IPEL):
 
     C = (P + Q) / 2
 
+    '''
+    # 创建3D图形 可视化验证
+    fig = plt.figure(figsize=(12, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # 绘制X射线源点
+    ax.scatter(*A0, color='red', s=100, label='XSA')
+    ax.scatter(*B0, color='blue', s=100, label='XSB')
+    
+    # 绘制成像点
+    ax.scatter(*IPA, color='red', s=50, marker='^', label='IPA')
+    ax.scatter(*IPB, color='blue', s=50, marker='^', label='IPB')
+    
+    # 绘制P和Q点
+    ax.scatter(*P, color='green', s=100, marker='o', label='P (Closest on Ray A)')
+    ax.scatter(*Q, color='purple', s=100, marker='o', label='Q (Closest on Ray B)')
+    
+    # 绘制中点C
+    ax.scatter(*C, color='orange', s=150, marker='X', label='C (Midpoint)')
+    
+    # 绘制射线
+    # 射线A: 从XSA到IPA，并延长一些
+    ray_a_length = np.linalg.norm(IPA - A0)
+    ray_a_extended = A0 + 1.5 * ray_a_length * u_unit
+    ax.plot([A0[0], ray_a_extended[0]], 
+            [A0[1], ray_a_extended[1]], 
+            [A0[2], ray_a_extended[2]], 'r-', linewidth=2, alpha=0.7)
+    
+    # 射线B: 从XSB到IPB，并延长一些
+    ray_b_length = np.linalg.norm(IPB - B0)
+    ray_b_extended = B0 + 1.5 * ray_b_length * v_unit
+    ax.plot([B0[0], ray_b_extended[0]], 
+            [B0[1], ray_b_extended[1]], 
+            [B0[2], ray_b_extended[2]], 'b-', linewidth=2, alpha=0.7)
+    
+    # 绘制P和Q之间的连线
+    ax.plot([P[0], Q[0]], 
+            [P[1], Q[1]], 
+            [P[2], Q[2]], 'g--', linewidth=2, alpha=0.7, label='PQ (Shortest Distance)')
+    
+    # 设置坐标轴标签
+    ax.set_xlabel('X (mm)')
+    ax.set_ylabel('Y (mm)')
+    ax.set_zlabel('Z (mm)')
+    
+    # 设置标题
+    ax.set_title('X-Ray Intersection Visualization')
+    
+    # 添加图例
+    ax.legend()
+    
+    # 添加网格
+    ax.grid(True)
+    
+    # 显示图形
+    plt.show()
+    
+    # 打印点坐标信息
+    print(f"XSA: {A0}")
+    print(f"XSB: {B0}")
+    print(f"IPA: {IPA}")
+    print(f"IPB: {IPB}")
+    print(f"P (Closest on Ray A): {P}")
+    print(f"Q (Closest on Ray B): {Q}")
+    print(f"C (Midpoint): {C}")
+    print(f"Distance between P and Q: {np.linalg.norm(P - Q):.4f} mm")
+    '''  
+
     return C
 
 
@@ -268,4 +336,5 @@ if __name__ == "__main__":
         process_marker_files(folder_path, resolution)
         print("批量处理完成")
     except Exception as e:
+
         print(f"处理过程中出错: {e}")
