@@ -30,8 +30,4 @@ compute_intersection_tumor_LPF_adaptive.py用于根据成像系统几何信息�
 
 analyze_3D_trajectory_errors.py用于分析预测的肿瘤中心点在3维空间中的运动轨迹误差，并作图
 
-
-
-
-
-
+结果显示，我们的工作流在LR方向上的误差为1.871±1.348mm, 在LR方向上的误差为1.552±1.070mm, 在LR方向上的误差为2.082±1.568mm, 欧几里得距离为3.602±2.072mm
