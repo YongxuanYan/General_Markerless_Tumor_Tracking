@@ -12,7 +12,7 @@ import json
 from globals import get_var, set_var
 
 # Temporary directory path
-TEMP_DIR = 'path/to/temporary/directory'
+TEMP_DIR = 'path/to/CT_data.npy/directory'
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 
