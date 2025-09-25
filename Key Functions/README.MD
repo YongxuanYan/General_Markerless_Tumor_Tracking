@@ -8,4 +8,6 @@ generate_Simulated_X-ray_from_DRR.py : As illustrated by its name, it is used to
 
 set_fiducial_marker_area_obvious.py : it contains a interactive tool to select and expand fiducial marker in CT data simply by click the fiducial marker in a plot window.
 
+tack_fiducial_markers.py : It is used to tracking fiducial marker from image sequences with Optical flow.
+
 
