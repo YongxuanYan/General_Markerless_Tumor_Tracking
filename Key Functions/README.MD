@@ -10,4 +10,5 @@ set_fiducial_marker_area_obvious.py : it contains a interactive tool to select a
 
 tack_fiducial_markers.py : It is used to tracking fiducial marker from image sequences with Optical flow.
 
+compute_intersection_fiducial_marker.py and compute_intersection_tumor_LPF_adaptive.py : they are used to calculate 3D trajectories of fiducial markers and tumor centers from 2D trajectories. Figure~5 from our paper is generated using analyze_global_frequency in compute_intersection_tumor_LPF_adaptive.py.
 
