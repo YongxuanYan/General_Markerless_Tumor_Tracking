@@ -6,4 +6,6 @@ DUCK-Net Official Github project:https://github.com/swz30/Restormer
 
 generate_Simulated_X-ray_from_DRR.py : As illustrated by its name, it is used to generate simulated X-ray fluoroscopic images from DRR.
 
+set_fiducial_marker_area_obvious.py : it contains a interactive tool to select and expand fiducial marker in CT data simply by click the fiducial marker in a plot window.
+
 
