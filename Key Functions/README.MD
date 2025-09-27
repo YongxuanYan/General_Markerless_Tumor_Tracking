@@ -12,3 +12,7 @@ tack_fiducial_markers.py : It is used to tracking fiducial marker from image seq
 
 compute_intersection_fiducial_marker.py and compute_intersection_tumor_LPF_adaptive.py : they are used to calculate 3D trajectories of fiducial markers and tumor centers from 2D trajectories. Figure~5 from our paper is generated using analyze_global_frequency in compute_intersection_tumor_LPF_adaptive.py.
 
+analyze_3D_trajectory_errors.py is used to generate 3D trajectory comparison as shown in Figure.14
+
+add_couch_angle_info.py is used to add couch angle information to 2D trajectory csv files.
+
