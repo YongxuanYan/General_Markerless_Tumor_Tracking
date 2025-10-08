@@ -1,206 +1,218 @@
-import os
 import cv2
+import glob
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from natsort import natsorted
 import matplotlib.pyplot as plt
-import glob
-import shutil
+from natsort import natsorted
+from pathlib import Path
+from tqdm import tqdm
 
+# =============================================================================
+# --- CONFIGURATION ---
+# =============================================================================
+# Anonymized: Please replace with your actual paths.
+BASE_DATA_DIR = Path("/path/to/your/PatientData/CFI")
+OUTPUT_DIR = Path("/path/to/your/Markers/Trajectories")
 
-"""
-Optical flow-based tracking of fiducial markers in X-ray images.
-Generates processed list for skipping, trajectory CSV files, and marked images with green bounding boxes.
-"""
+# Derived output paths
+MARKER_VISUALIZATION_DIR = OUTPUT_DIR / "Markers"
+PROCESSED_LOG_FILE = OUTPUT_DIR / "processed_sequences.txt"
 
-# Configuration parameters
-BASE_DIR = "path/to/patient/data"  # Base directory containing patient data
-OUTPUT_DIR = "path/to/trajectory/output"  # Output directory for trajectories
-MARKERS_DIR = os.path.join(OUTPUT_DIR, "Markers")  # Directory for marked images
-PROCESSED_LOG = os.path.join(OUTPUT_DIR, "processed_sequences.txt")  # Log file for processed sequences
+# Lucas-Kanade optical flow parameters
+LK_PARAMS = dict(
+    winSize=(8, 8),
+    maxLevel=2,
+    criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.001),
+)
 
+# =============================================================================
+# --- UTILITY FUNCTIONS ---
+# =============================================================================
 
-def load_processed_sequences():
-    """Load list of already processed sequences."""
-    if not os.path.exists(PROCESSED_LOG):
+def load_processed_sequences() -> set:
+    """Loads the set of sequence IDs that have already been processed."""
+    if not PROCESSED_LOG_FILE.exists():
         return set()
-    with open(PROCESSED_LOG, 'r') as f:
-        return set(line.strip() for line in f if line.strip())
+    with open(PROCESSED_LOG_FILE, 'r') as f:
+        return {line.strip() for line in f if line.strip()}
 
-
-def mark_sequence_processed(sequence_id):
-    """Mark a sequence as processed."""
-    with open(PROCESSED_LOG, 'a') as f:
+def mark_sequence_as_processed(sequence_id: str) -> None:
+    """Appends a sequence ID to the log of processed sequences."""
+    with open(PROCESSED_LOG_FILE, 'a') as f:
         f.write(f"{sequence_id}\n")
 
+def get_user_selected_point(image: np.ndarray) -> tuple:
+    """
+    Displays an image and prompts the user to click on a point.
 
-def get_user_selected_point(r_channel):
-    """Display R channel and allow user to manually select marker point."""
+    Args:
+        image: The grayscale image to display.
+
+    Returns:
+        A tuple (x, y) of the selected coordinates.
+    """
     plt.ion()  # Enable interactive mode
     fig, ax = plt.subplots(figsize=(10, 8))
-    ax.imshow(r_channel, cmap='gray')
-    ax.set_title("Please select marker (black dot) and then close the window")
+    ax.imshow(image, cmap='gray')
+    ax.set_title("Select the fiducial marker (black dot), then close this window to continue.")
     ax.axis('on')
 
-    print("\nPlease select marker dot")
+    print("\nPlease select the marker in the displayed window...")
+    # ginput(1, timeout=0) waits indefinitely for one click
     selected_point = plt.ginput(1, timeout=0)[0]
-    plt.close()
-    return selected_point  # Return (x,y) tuple
+    plt.close(fig)
+    print(f"Point selected at: ({selected_point[0]:.1f}, {selected_point[1]:.1f})")
+    return selected_point
 
+def save_marked_image(image_path: Path, point: tuple, output_path: Path) -> bool:
+    """
+    Saves a copy of an image with a green square marking a specified point.
 
-def save_marked_image(img_path, point, output_path):
-    """Save image with marked point."""
-    img = cv2.imread(img_path)
-    if img is None:
+    Args:
+        image_path: Path to the original image.
+        point: The (x, y) coordinate to mark.
+        output_path: Path to save the marked image.
+
+    Returns:
+        True if successful, False otherwise.
+    """
+    image = cv2.imread(str(image_path))
+    if image is None:
         return False
-
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
     x, y = int(point[0]), int(point[1])
-
-    # Draw 10x10 green bounding box
-    cv2.rectangle(img_rgb, (x - 5, y - 5), (x + 5, y + 5), (0, 255, 0), 2)
-
-    cv2.imwrite(output_path, cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR))
+    # Draw a 10x10 green rectangle centered on the point
+    cv2.rectangle(image, (x - 5, y - 5), (x + 5, y + 5), (0, 255, 0), 2)
+    
+    cv2.imwrite(str(output_path), image)
     return True
 
+# =============================================================================
+# --- CORE TRACKING LOGIC ---
+# =============================================================================
 
-def track_single_sequence(img_files, sequence_id):
-    """Process single sequence and save marked images."""
-    marker_output_dir = os.path.join(MARKERS_DIR, sequence_id.replace('/', '\\'))
-    os.makedirs(marker_output_dir, exist_ok=True)
+def track_markers_in_sequence(image_files: list, sequence_id: str) -> pd.DataFrame | None:
+    """
+    Performs optical flow tracking on a single sequence of images.
 
-    # Read first frame (extract R channel)
-    first_frame = cv2.imread(img_files[0])
+    Args:
+        image_files: A sorted list of image file paths.
+        sequence_id: A unique identifier for the sequence.
+
+    Returns:
+        A DataFrame with the trajectory data, or None if tracking fails.
+    """
+    marker_output_dir = MARKER_VISUALIZATION_DIR / sequence_id
+    marker_output_dir.mkdir(parents=True, exist_ok=True)
+
+    first_frame = cv2.imread(str(image_files[0]))
     if first_frame is None:
-        print(f"Cannot read first frame: {img_files[0]}")
+        print(f"Error: Could not read the first frame: {image_files[0]}")
         return None
 
-    r_channel = first_frame[:, :, 0]  # OpenCV uses BGR order, index 2 is R channel
+    # Use the red channel for tracking, as fiducials are often dark
+    first_frame_red_channel = first_frame[:, :, 2]  # OpenCV is BGR, so index 2 is Red
 
-    # User manually selects marker point
     try:
-        initial_point = get_user_selected_point(r_channel)
-        print(f"Selected point ({initial_point[0]:.1f}, {initial_point[1]:.1f})")
+        initial_point = get_user_selected_point(first_frame_red_channel)
     except Exception as e:
-        print(f"Selection failed: {e}")
+        print(f"Error during point selection: {e}. Skipping sequence.")
         return None
 
-    # Save first marked image
-    first_output = os.path.join(marker_output_dir, os.path.basename(img_files[0]))
-    save_marked_image(img_files[0], initial_point, first_output)
+    # Save visualization of the selected point on the first frame
+    first_frame_output_path = marker_output_dir / image_files[0].name
+    save_marked_image(image_files[0], initial_point, first_frame_output_path)
 
-    # Prepare optical flow tracking (using inverted R channel)
-    inverted_r = 255 - r_channel  # Invert to make black dots white
+    # Prepare for optical flow. Invert the image so the dark marker becomes bright.
+    prev_image_inverted = 255 - first_frame_red_channel
+    prev_point = np.array([initial_point], dtype=np.float32).reshape(-1, 1, 2)
     trajectory = [initial_point]
-    prev_pt = np.array([initial_point], dtype=np.float32).reshape(-1, 1, 2)
-    prev_img = inverted_r
 
-    lk_params = dict(
-        winSize=(8, 8),
-        maxLevel=2,  # Increase pyramid levels
-        criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.001),
-    )
-
-    # Process subsequent frames
-    for i, path in enumerate(tqdm(img_files[1:], desc="Tracking", leave=False)):
-        curr_frame = cv2.imread(path)
-        if curr_frame is None:
-            print(f"Warning: cannot read {os.path.basename(path)}")
-            trajectory.append(trajectory[-1])  # Use previous position
-            if trajectory:
-                save_marked_image(path, trajectory[-1],
-                                os.path.join(marker_output_dir, os.path.basename(path)))
-            continue
-
-        curr_img = 255 - curr_frame[:, :, 0]  # Inverted R channel
-        curr_pt, status, _ = cv2.calcOpticalFlowPyrLK(
-            prev_img, curr_img, prev_pt, None, **lk_params)
-
-        # Update trajectory
-        if status[0] == 1:
-            x, y = curr_pt.ravel()
-            trajectory.append((x, y))
-        else:
+    for image_path in tqdm(image_files[1:], desc=f"Tracking {sequence_id}", leave=False):
+        current_frame = cv2.imread(str(image_path))
+        if current_frame is None:
+            print(f"Warning: Could not read frame {image_path.name}. Using last known position.")
             trajectory.append(trajectory[-1])
+            continue
+            
+        current_image_inverted = 255 - current_frame[:, :, 2]
+        
+        # Calculate optical flow
+        next_point, status, _ = cv2.calcOpticalFlowPyrLK(
+            prev_image_inverted, current_image_inverted, prev_point, None, **LK_PARAMS
+        )
 
-        # Save current marked image
-        save_marked_image(path, trajectory[-1],
-                        os.path.join(marker_output_dir, os.path.basename(path)))
+        # Update trajectory and reference point
+        if status[0] == 1 and next_point is not None:
+            current_pos = tuple(next_point.ravel())
+            trajectory.append(current_pos)
+            prev_point = next_point.reshape(-1, 1, 2)
+        else: # If tracking is lost, use the last known position
+            trajectory.append(trajectory[-1])
+        
+        # Update reference image for the next frame
+        prev_image_inverted = current_image_inverted
 
-        # Update references
-        prev_img = curr_img
-        prev_pt = curr_pt if status[0] == 1 else prev_pt
-
-    # Save sequence results
-    result_df = pd.DataFrame([
-        {'frame': idx, 'marker_x': x, 'marker_y': y}
-        for idx, (x, y) in enumerate(trajectory)
-    ])
+    # Create a DataFrame from the tracked trajectory
+    result_df = pd.DataFrame(
+        [{'frame': idx, 'marker_x': x, 'marker_y': y} for idx, (x, y) in enumerate(trajectory)]
+    )
     return result_df
 
+# =============================================================================
+# --- MAIN EXECUTION ---
+# =============================================================================
 
-def process_all_sequences():
-    """Process all patient data sequences."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(MARKERS_DIR, exist_ok=True)
-    processed = load_processed_sequences()
-    patient_dirs = natsorted(glob.glob(os.path.join(BASE_DIR, "PT*")))
+def process_all_patient_data():
+    """
+    Main function to iterate through all patient data, track fiducial markers,
+    and save the results.
+    """
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    MARKER_VISUALIZATION_DIR.mkdir(parents=True, exist_ok=True)
+    
+    processed_sequences = load_processed_sequences()
+    patient_dirs = natsorted(list(BASE_DATA_DIR.glob("PT*")))
 
-    for p_dir in tqdm(patient_dirs, desc="Processing patients"):
-        patient_id = os.path.basename(p_dir)
-
-        # Process F folders
-        for f_dir in natsorted(glob.glob(os.path.join(p_dir, "F*"))):
-            field_id = os.path.basename(f_dir)
-
-            # Process both grab folders
-            for grab_dir in [os.path.join(f_dir, "grab0"), os.path.join(f_dir, "grab1")]:
-                if not os.path.exists(grab_dir):
+    for patient_dir in tqdm(patient_dirs, desc="Processing Patients"):
+        field_dirs = natsorted(list(patient_dir.glob("F*")))
+        for field_dir in field_dirs:
+            for device in ["grab0", "grab1"]:
+                device_dir = field_dir / device
+                if not device_dir.is_dir():
                     continue
 
-                # Build unique sequence ID
-                device_id = os.path.basename(grab_dir)
-                sequence_id = f"{patient_id}/{field_id}/{device_id}"
-
-                # Skip already processed sequences
-                if sequence_id in processed:
-                    print(f"Skipping processed sequence: {sequence_id}")
+                sequence_id = f"{patient_dir.name}/{field_dir.name}/{device}"
+                if sequence_id in processed_sequences:
+                    print(f"Skipping already processed sequence: {sequence_id}")
                     continue
 
-                # Get image files
-                img_files = natsorted(
-                    glob.glob(os.path.join(grab_dir, "*.png")) +
-                    glob.glob(os.path.join(grab_dir, "*.tif")) +
-                    glob.glob(os.path.join(grab_dir, "*.jpg")),
-                    key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
-                )
-
-                if not img_files:
+                image_files = natsorted(list(device_dir.glob("*.[pjt][npi][gf]")))
+                if not image_files:
                     print(f"No images found in sequence: {sequence_id}")
                     continue
 
-                print(f"\nProcessing sequence: {sequence_id}")
-                print(f"Number of images: {len(img_files)}")
-
-                # Process current sequence
-                seq_df = track_single_sequence(img_files, sequence_id)
-                if seq_df is None:
-                    print(">> Processing failed, skipping")
+                print(f"\nNow processing sequence: {sequence_id} ({len(image_files)} images)")
+                
+                sequence_df = track_markers_in_sequence(image_files, sequence_id)
+                if sequence_df is None:
+                    print(f">> Failed to process sequence {sequence_id}. Skipping.")
                     continue
 
-                # Add metadata and save
-                seq_df['patient'] = patient_id
-                seq_df['field'] = field_id
-                seq_df['device'] = device_id
+                # Add metadata and save the results to a CSV file
+                sequence_df['patient'] = patient_dir.name
+                sequence_df['field'] = field_dir.name
+                sequence_df['device'] = device
+                
+                output_filename = f"{sequence_id.replace('/', '_')}.csv"
+                output_path = OUTPUT_DIR / output_filename
+                sequence_df.to_csv(output_path, index=False)
+                
+                mark_sequence_as_processed(sequence_id)
+                print(f">> Trajectory saved to: {output_path}")
 
-                output_file = os.path.join(OUTPUT_DIR, f"{sequence_id.replace('/', '_')}.csv")
-                seq_df.to_csv(output_file, index=False)
-                mark_sequence_processed(sequence_id)
-                print(f">> Saved to: {output_file}")
-
-    print("\nAll sequences processed successfully!")
+    print("\nAll sequences have been processed!")
 
 
 if __name__ == "__main__":
-    process_all_sequences()
+    process_all_patient_data()
