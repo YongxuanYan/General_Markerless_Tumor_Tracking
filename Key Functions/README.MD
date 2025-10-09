@@ -14,5 +14,3 @@ compute_intersection_fiducial_marker.py and compute_intersection_tumor_LPF_adapt
 
 analyze_3D_trajectory_errors.py is used to generate 3D trajectory comparison as shown in Figure.14
 
-add_couch_angle_info.py is used to add couch angle information to 2D trajectory csv files.
-
