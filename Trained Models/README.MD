@@ -1,6 +1,6 @@
 You can download the trained models from google drive:
 
-Restormer model:
+Restormer model fine-tuned with data generated using proposed method:
 https://drive.google.com/file/d/1WV5J1z6dvDM9Mgi4X61pOPpD5oGTjxJA/view?usp=sharing
 
 and DUCK-Net:
